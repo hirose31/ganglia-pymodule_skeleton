@@ -9,6 +9,7 @@ import traceback
 import os
 import threading
 import time
+import MySQLdb
 
 descriptors = list()
 Desc_Skel   = {}
@@ -17,13 +18,25 @@ _Lock = threading.Lock() # synchronization lock
 Debug = False
 
 # FIXME modify as you like
-Param_Keys = ["device", "host"]
+Param_Keys = ["dbhost", "dbuser", "dbpasswd", "db"]
 
 def dprint(f, *v):
     if Debug:
         print >>sys.stderr, "DEBUG: "+f % v
 
 class UpdateMetricThread(threading.Thread):
+
+    # FIXME modify as you like
+    query = {
+        "single1": "select 11 from dual",
+        }
+
+    query_multi = {
+        "multi1": {
+            "columns": ["name","age"],
+            "sql"    : "select 2, 3 from dual",
+            },
+        }
 
     def __init__(self, params):
         threading.Thread.__init__(self)
@@ -58,9 +71,39 @@ class UpdateMetricThread(threading.Thread):
         self.running = False
 
     def update_metric(self):
-        # FIXME modify as you like
-        self.metric["foo"] = 8
-        self.metric["bar"] = 9
+        conn = None
+        try:
+            conn = MySQLdb.connect(
+                host        = self.p["dbhost"],
+                user        = self.p["dbuser"],
+                passwd      = self.p["dbpasswd"],
+                db          = self.p["db"],
+                use_unicode = True,
+                charset     = "utf8",
+                )
+
+            # single result
+            for metric, sql in self.__class__.query.iteritems():
+                conn.query(sql)
+                r = conn.store_result()
+                self.metric[self.prefix+"_"+metric] = int(r.fetch_row(1,0)[0][0])
+                dprint("update_metric: %s = %d", metric, self.metric[self.prefix+"_"+metric])
+
+            # multi result
+            for metric, q in self.__class__.query_multi.iteritems():
+                conn.query(q["sql"])
+                r = conn.store_result()
+                row = r.fetch_row(1,0)[0];
+                for i, c in enumerate(q["columns"]):
+                    metric_name = self.prefix+"_"+c
+                    self.metric[metric_name] = row[i]
+                    dprint("update_metric: %s.%s = %d", metric, c, self.metric[metric_name])
+
+        except MySQLdb.MySQLError:
+            traceback.print_exc()
+        finally:
+            if conn:
+                conn.close()
 
     def metric_of(self, name):
         val = 0
@@ -84,7 +127,7 @@ def metric_init(params):
     Desc_Skel = {
         'name'        : 'FIXME TBD',
         'call_back'   : metric_of,
-        'time_max'    : 60,
+        'time_max'    : 2 * 60 * 60,
         # must adjust value of "value_type" and "format"
         'value_type'  : 'uint', # string | uint | float | double
         'format'      : '%d',   # %s     | %d   | %f    | %f
@@ -115,18 +158,11 @@ def metric_init(params):
 
     # FIXME modify as you like
     descriptors.append(create_desc(Desc_Skel, {
-                "name"       : params["prefix"]+"_foo",
-                "value_type" : "float",
-                "format"     : "%.3f",
-                "units"      : "req/sec",
-                "description": "request per second",
-                }))
-    descriptors.append(create_desc(Desc_Skel, {
-                "name"       : params["prefix"]+"_bar",
+                "name"       : params["prefix"]+"_single1",
                 "value_type" : "uint",
                 "format"     : "%d",
-                "units"      : "bytes/sec",
-                "description": "byte per sec",
+                "units"      : "q",
+                "description": "single value",
                 }))
 
     return descriptors
@@ -147,8 +183,11 @@ def metric_cleanup():
 if __name__ == '__main__':
     try:
         params = {
-            "device"       : "eth0",
-            "host"         : "localhost",
+            "dbhost"       : "127.0.0.1",
+            "dbuser"       : "root",
+            "dbpasswd"     : "",
+            "db"           : "",
+            "prefix"       : "foo2",
             #
             "refresh_rate" : 5,
             "debug"        : True,

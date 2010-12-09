@@ -1,11 +1,20 @@
 ganglia-pymodule_skeleton
-================================
+========================
 
-Skeleton code for python module of Ganglia
+skeleton code for python module of Ganglia
 
+USAGE
+------------------------
+
+generate files by "setup.sh" and copy skeleton script of python module.
+
+    ./setup.sh newmetric
+    cp skel_thread_mysql.py ganglia-pymodule_newmetric/python_modules/netmetric.py
+    vi ganglia-pymodule_newmetric/python_modules/netmetric.py
+    vi ganglia-pymodule_newmetric/conf.d/newmetric.conf
 
 COPYRIGHT & LICENSE
-================================
+------------------------
 
     Copyright 2010 HIROSE, Masaaki
     
