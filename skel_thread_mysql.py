@@ -54,6 +54,12 @@ class UpdateMetricThread(threading.Thread):
         self.refresh_rate = int(params["refresh_rate"])
         self.metric       = {}
 
+        for metric, sql in self.__class__.query.iteritems():
+            self.metric[metric] = 0
+        for q in self.__class__.query_multirow:
+            for i, metric in q["metric"].iteritems():
+                self.metric[metric] = 0
+
         self.p = {}
         for k in Param_Keys:
             if k in params:
@@ -105,9 +111,13 @@ class UpdateMetricThread(threading.Thread):
                     rows = r.fetch_row(1,0)
                     if not rows: break
                     for row in rows:
-                        metric_name = self.prefix+"_"+q["metric"][str(row[0])]
-                        self.metric[metric_name] = int(row[1])
-                        dprint("update_metric: %s = %d", metric_name, self.metric[metric_name])
+                        idx = str(row[0])
+                        if idx in q["metric"]:
+                            metric_name = self.prefix+"_"+q["metric"][idx]
+                            self.metric[metric_name] = int(row[1])
+                            dprint("update_metric: %s = %d", metric_name, self.metric[metric_name])
+                        else:
+                            print >>sys.stderr, "upate_metric: not found metric for id: %s" % idx
 
         except MySQLdb.MySQLError:
             traceback.print_exc()
