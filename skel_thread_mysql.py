@@ -31,12 +31,20 @@ class UpdateMetricThread(threading.Thread):
         "single1": "select 11 from dual",
         }
 
-    query_multi = {
-        "multi1": {
-            "columns": ["name","age"],
-            "sql"    : "select 2, 3 from dual",
+    # query result must be 2 columns and many rows.
+    # status | count(*)
+    # -----------------
+    #      0 |       32
+    #      1 |      625
+    query_multirow = [
+        {
+            "metric": {
+                "0": "guest",
+                "1": "member",
+                },
+            "sql"   : "select status,count(*) from user group by status",
             },
-        }
+        ]
 
     def __init__(self, params):
         threading.Thread.__init__(self)
@@ -90,14 +98,16 @@ class UpdateMetricThread(threading.Thread):
                 dprint("update_metric: %s = %d", metric, self.metric[self.prefix+"_"+metric])
 
             # multi result
-            for metric, q in self.__class__.query_multi.iteritems():
+            for q in self.__class__.query_multirow:
                 conn.query(q["sql"])
                 r = conn.store_result()
-                row = r.fetch_row(1,0)[0];
-                for i, c in enumerate(q["columns"]):
-                    metric_name = self.prefix+"_"+c
-                    self.metric[metric_name] = row[i]
-                    dprint("update_metric: %s.%s = %d", metric, c, self.metric[metric_name])
+                while True:
+                    rows = r.fetch_row(1,0)
+                    if not rows: break
+                    for row in rows:
+                        metric_name = self.prefix+"_"+q["metric"][str(row[0])]
+                        self.metric[metric_name] = int(row[1])
+                        dprint("update_metric: %s = %d", metric_name, self.metric[metric_name])
 
         except MySQLdb.MySQLError:
             traceback.print_exc()
@@ -159,10 +169,20 @@ def metric_init(params):
     # FIXME modify as you like
     descriptors.append(create_desc(Desc_Skel, {
                 "name"       : params["prefix"]+"_single1",
-                "value_type" : "uint",
-                "format"     : "%d",
+                "value_type" : "float",
+                "format"     : "%f",
                 "units"      : "q",
                 "description": "single value",
+                }))
+    descriptors.append(create_desc(Desc_Skel, {
+                "name"       : params["prefix"]+"_guest",
+                "units"      : "people",
+                "description": "number of guest",
+                }))
+    descriptors.append(create_desc(Desc_Skel, {
+                "name"       : params["prefix"]+"_member",
+                "units"      : "people",
+                "description": "number of registered member",
                 }))
 
     return descriptors
